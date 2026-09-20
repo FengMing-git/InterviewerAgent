@@ -47,31 +47,7 @@
 | 前端 | Next.js + React + TypeScript + Tailwind CSS 4 + Recharts（静态导出，由 FastAPI 托管，单进程部署） |
 | 测试 | pytest（后端）、Vitest（前端） |
 
-## 目录结构
-
-> 这是**目标结构**：✅ 已落地，⬜ 未开始（逐项状态见[开发进度](docs/开发进度.md)）。
-
-```text
-InterviewerAgent/
-├── pyproject.toml / uv.lock      # Python 依赖（uv 管理）
-├── docs/
-│   ├── design/                   # 技术设计方案、项目目录结构
-│   └── course/                   # 课程文档模板与要求
-├── backend/
-│   ├── .env.example              # 配置模板（模型 / 密钥 / 数据库 / 代理）
-│   ├── app/
-│   │   ├── main.py               # ⬜ FastAPI 入口、CORS、lifespan、静态托管
-│   │   ├── config.py             # ✅ 配置唯一出口（pydantic-settings）
-│   │   ├── api/v1/               # ⬜ 路由：resumes / sessions / interview / reports
-│   │   ├── models/
-│   │   │   ├── orm.py            # ✅ 4 张业务表
-│   │   │   └── schemas.py        # ✅ 四大数据契约
-│   │   ├── common/               # ✅ db / events（NDJSON 协议）
-│   │   └── agent/                # ⬜ 简历解析、联网核实、面试引擎、评估报告
-│   └── tests/                    # ✅ pytest 用例（不依赖 .env 与 MySQL）
-└── frontend/                     # ⬜ 页面、聊天组件、报告图表（脚手架待搭建）
-    └── types/                    # ✅ 契约镜像 index.ts
-```
+## 目录结构            
 
 完整的目录说明见 [`docs/design/项目目录结构.md`](docs/design/项目目录结构.md)。
 
