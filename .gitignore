@@ -222,3 +222,15 @@ __marimo__/
 
 # test
 /test/
+
+# ---- InterviewerAgent 项目 ----
+# backend/.env 已被上面的 .env 规则覆盖；.env.example 需要提交，勿忽略
+# 注意：gitignore 只认「整行注释」，行尾 # 说明会被当成模式的一部分，规则随之失效
+# 上传的简历原件（uuid 命名，含个人信息，不入库）
+backend/uploads/
+# Next.js 静态导出产物（构建期生成）
+backend/static/
+frontend/node_modules/
+frontend/.next/
+# next build 的静态导出目录
+frontend/out/
