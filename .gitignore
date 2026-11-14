@@ -15,6 +15,7 @@ __pycache__/
 # IDE / 工具本地配置
 .idea/
 .claude/
+.pi/
 
 # ---- InterviewerAgent 项目 ----
 # 上传的简历原件（uuid 命名，含个人信息，不入库）

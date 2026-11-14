@@ -40,6 +40,28 @@ RESEARCH_TIMEOUT = 120.0  # 联网核实整体硬超时（秒）→ 以已得证
 RESEARCH_MAX_TOOL_CALLS = 12  # ReAct 工具调用轮数上限（防失控）
 SQL_ECHO = False  # 打印 SQLAlchemy 生成的 SQL（排查建表/慢查询时改 True）
 
+# ── 安全与业务规则（Plan §9）──────────────────────────────────────────────
+JWT_EXPIRE_HOURS = 24  # 登录 JWT 有效期（小时）
+FREE_INTERVIEWS_PER_DAY = 4  # 无自定义模型的用户每日免费面试场数
+MAX_ACTIVE_SESSIONS = 10  # 同时进行的面试会话上限（超出则排队）
+RESUME_RETENTION_DAYS = 30  # 简历原件保留天数，到期删除并清空 resume_path
+MAX_REPOS = 3  # 单场面试最多绑定的公开仓库数
+MAX_TURNS = 30  # 面试总轮数上限，达到后强制进入第 5 阶段收尾
+MAX_FOLLOWUPS = {1: 0, 2: 1, 3: 2}  # 按难度档位（1-3）的每个方向追问次数上限
+ANSWER_MAX_CHARS = 2000  # 候选人单条回答长度上限（字）
+QUESTION_MAX_CHARS = 300  # 面试官单条提问长度上限（字）
+ANSWER_VERIFY_MAX_TOOL_CALLS = 3  # 面试中核实（单轮）工具调用上限
+ZOMBIE_TASK_MINUTES = 5  # 后台任务僵死判定阈值（分钟），启动时复位
+# 报告五维权重（和为 1）；键名与 SRS 维度对应，报告页同款顺序
+# TODO(P4)：维度键名与 SRS 报告模板对齐后如有出入再调整
+SCORE_WEIGHTS = {
+    "professionalism": 0.30,  # 专业能力
+    "project_depth": 0.25,  # 项目深度
+    "principles": 0.20,  # 原理掌握
+    "authenticity": 0.15,  # 表述真实性
+    "communication": 0.10,  # 沟通表达
+}
+
 
 class Settings(BaseSettings):
     """必填项无默认值：缺任意一项，import 时就报错点名，启动即失败。"""
@@ -56,6 +78,12 @@ class Settings(BaseSettings):
     llm_model: str
     llm_base_url: str
     tavily_api_key: str
+
+    # ── 安全（P0 骨架起必填，缺了启动即报错）────────────────────────────────
+    jwt_secret: str  # JWT 签名密钥：openssl rand -hex 32 或 secrets.token_hex(32)
+    # 32 字节密钥的 base64（AES-256-GCM 用，加密用户自定义 API Key）
+    # 生成：uv run python -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())"
+    app_encryption_key: str
 
     # ── 可选（缺失属于"优雅降级"，不是配置错误）────────────────────────────
     github_token: str = ""  # 不填则 GitHub 限流 60 次/h（§8 风险 1）

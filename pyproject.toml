@@ -23,15 +23,17 @@ dependencies = [
     "pymupdf>=1.28.2",
     "python-docx>=1.2.0",
     "httpx>=0.28.1",
+    "bcrypt>=5.0.0",
+    "pyjwt>=2.15.1",
 ]
-
-[[tool.uv.index]]
-url = "https://mirrors.aliyun.com/pypi/simple/"
-default = true
 
 [tool.uv]
 # 本项目是应用而非库：uv 只管理环境，不构建/安装自身
 package = false
+
+[[tool.uv.index]]
+url = "https://mirrors.aliyun.com/pypi/simple/"
+default = true
 
 [dependency-groups]
 dev = [
