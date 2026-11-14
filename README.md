@@ -36,3 +36,50 @@ uv run pytest -k "not ping"   # 跳过在线 LLM 调用
 ## 许可
 
 见 [LICENSE](LICENSE)。
+
+## 使用说明
+
+1. 安装MySQL并在MySQL中创建intervieweragent数据库
+2. 配置backend\.env
+```example
+# ── 必填 ───────────────────────────────────────────────────────────────────
+# API Key，形如 sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+LLM_API_KEY=
+# 模型名称
+LLM_MODEL=
+# base url
+LLM_BASE_URL=
+# Tavily API Key，形如 tvly-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TAVILY_API_KEY=
+# 数据库端口，root后面密钥记得修改
+DATABASE_URL=mysql+pymysql://root:ia123456@127.0.0.1:3306/intervieweragent?charset=utf8mb4
+
+# JWT 签名密钥：openssl rand -hex 32
+JWT_SECRET=
+# 32 字节密钥的 base64（AES-256-GCM，加密用户自定义 API Key）
+# 生成：uv run python -c "import os,base64;print(base64.b64encode(os.urandom(32)).decode())"
+APP_ENCRYPTION_KEY=
+
+# ── 可选 ───────────────────────────────────────────────────────────────────
+# GitHub token
+GITHUB_TOKEN=
+# 代理
+HTTP_PROXY=
+```
+3. 配置frontend\.env
+```example
+# ── 必填 ───────────────────────────────────────────────────────────────────
+# 接口地址：默认指向本地 FastAPI
+NEXT_PUBLIC_API_BASE=http://127.0.0.1:8000/api/v1
+```
+4. 构建前端产物并运行
+```bash
+cd .\frontend\
+npm install
+npm run build
+npm run dev
+```
+5. 运行后端
+```bash
+uv run python -m app.main
+```

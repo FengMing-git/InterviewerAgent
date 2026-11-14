@@ -6,7 +6,7 @@ __pycache__/
 .pytest_cache/
 
 # 环境与密钥（backend/.env.example 需要提交，勿忽略）
-.env
+.env*
 .venv/
 
 # 日志
