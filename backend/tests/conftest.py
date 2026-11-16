@@ -4,7 +4,8 @@
   * 测试库用独立的库名 `intervieweragent_test`，不碰业务库；
   * 机器上没有 .env（或 MySQL 连不上）时数据库相关测试整体 skip，
     保证 `uv run pytest` 在任何机器上都能全绿退出——本机跑请先配好 .env；
-  * 每个用例结束后清空所有表，用例之间互不串数据。
+  * 每个用例结束后清空所有表，用例之间互不串数据；
+  * LLM 一律用假模型（``GenericFakeChatModel`` 预设输出），不发生真实调用。
 """
 
 from __future__ import annotations
@@ -20,6 +21,15 @@ from app.main import create_app
 from app.models.orm import Base
 
 TEST_DB_NAME = "intervieweragent_test"
+
+
+def register_and_login(client: TestClient, username: str = "tester01", password: str = "password123") -> dict[str, str]:
+    """注册（或重复时登录）并返回 Bearer 头，供需要鉴权的接口测试复用。"""
+    response = client.post("/api/v1/auth/register", json={"username": username, "password": password})
+    if response.status_code == 409:  # 用户名已占用（同库重跑）
+        response = client.post("/api/v1/auth/login", json={"username": username, "password": password})
+    token = response.json()["token"]
+    return {"Authorization": f"Bearer {token}"}
 
 
 def _load_settings():
@@ -74,9 +84,15 @@ def db_engine():
 
 
 @pytest.fixture()
-def db(db_engine) -> Session:
-    """函数级会话；用例结束回滚 + 清表，保证隔离。"""
+def db(db_engine, monkeypatch) -> Session:
+    """函数级会话；用例结束回滚 + 清表，保证隔离。
+
+    同时把 ``app.core.db.SessionLocal`` 替换为测试库会话工厂：
+    后台任务（services/tasks.task_session）运行时取的是这个符号，
+    不替换的话任务线程会直接写业务库。
+    """
     factory = sessionmaker(bind=db_engine, autoflush=False, expire_on_commit=False)
+    monkeypatch.setattr("app.core.db.SessionLocal", factory)
     session = factory()
     try:
         yield session

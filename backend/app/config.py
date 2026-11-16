@@ -52,6 +52,16 @@ ANSWER_MAX_CHARS = 2000  # 候选人单条回答长度上限（字）
 QUESTION_MAX_CHARS = 300  # 面试官单条提问长度上限（字）
 ANSWER_VERIFY_MAX_TOOL_CALLS = 3  # 面试中核实（单轮）工具调用上限
 ZOMBIE_TASK_MINUTES = 5  # 后台任务僵死判定阈值（分钟），启动时复位
+
+# ── P1 解析流水线裁剪参数（防止提示词/上下文爆掉）──────────────────────
+RESUME_TEXT_MAX_CHARS = 12000  # 简历原文送入 LLM 的字符上限（超出截断）
+README_MAX_CHARS = 8000  # README 送入 LLM 的字符上限
+FILE_CONTENT_MAX_CHARS = 6000  # 单个关键文件送入 LLM 的字符上限
+TREE_MAX_ENTRIES = 500  # 目录树送入 LLM 的条目上限（超出按路径排序截断）
+KEY_FILES_MAX = 5  # 每个仓库挑选的关键文件数上限（Plan §6.1）
+FINDINGS_PER_REPO_MAX = 10  # 每个仓库 D2 findings 条数上限
+GITHUB_README_MAX_BYTES = 256 * 1024  # README 超过此大小时只摘要文件头
+GITHUB_FILE_MAX_BYTES = 512 * 1024  # 关键文件超过此大小时跳过不读
 # 报告五维权重（和为 1）；键名与 SRS 维度对应，报告页同款顺序
 # TODO(P4)：维度键名与 SRS 报告模板对齐后如有出入再调整
 SCORE_WEIGHTS = {

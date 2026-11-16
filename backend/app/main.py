@@ -18,12 +18,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from starlette.staticfiles import StaticFiles
 
-from app.api import auth, health, users
+from app.api import auth, health, interviews, users
 from app.config import settings
-from app.core.db import engine
+from app.core.db import SessionLocal, engine
 from app.core.errors import NOT_FOUND, AppError, register_exception_handlers
 from app.core.logger import get_logger
 from app.models.orm import Base
+from app.services.tasks import reset_zombie_tasks
 
 log = get_logger(__name__)
 
@@ -34,13 +35,16 @@ _DEV_ORIGINS = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    # 建表（幂等）。Plan §6.7：僵尸任务复位、30 天简历清理在 P1/P5 里补。
-    # 数据库暂不可达不阻断启动：/health 会如实报 db_ok=false，业务接口失败时再暴露。
+    # 建表（幂等）。数据库不可达不阻断启动：/health 会如实报 db_ok=false。
     try:
         Base.metadata.create_all(engine)
         log.info("数据库表已就绪（create_all 幂等）")
+        # 僵尸任务复位（Plan §6.7）：上次进程挂掉时 running 的任务置 failed，
+        # generating 一律归零；30 天简历清理随 P5 落地。
+        with SessionLocal() as db:
+            reset_zombie_tasks(db)
     except Exception as exc:  # noqa: BLE001 —— 启动期只告警不中断
-        log.warning("建表失败（数据库不可达？）：%s", str(exc).splitlines()[0])
+        log.warning("启动期数据库维护失败（数据库不可达？）：%s", str(exc).splitlines()[0])
     yield
 
 
@@ -61,6 +65,7 @@ def create_app() -> FastAPI:
     api.include_router(health.router)
     api.include_router(auth.router)
     api.include_router(users.router)
+    api.include_router(interviews.router)
     app.include_router(api)
 
     _mount_spa(app)

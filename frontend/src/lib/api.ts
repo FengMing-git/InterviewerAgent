@@ -68,6 +68,35 @@ export async function api<T>(path: string, opts: ApiOptions = {}): Promise<T> {
     );
   }
 
+  return _handleResponse<T>(res, token);
+}
+
+/**
+ * multipart 上传（POST FormData）。不带 Content-Type，让浏览器自动设 boundary。
+ */
+export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, { method: "POST", headers, body: form });
+  } catch (err) {
+    throw new ApiError(
+      "网络错误：无法连接服务器，请检查后端是否已启动",
+      0,
+      0,
+      String(err),
+    );
+  }
+  return _handleResponse<T>(res, token);
+}
+
+async function _handleResponse<T>(res: Response, token: string | null): Promise<T> {
+  // 204 无 body（删除等接口）
+  if (res.status === 204) return undefined as T;
+
   // 空 body 容错（理论上本项目的接口都有 JSON 响应）
   const body: unknown = await res.json().catch(() => null);
 

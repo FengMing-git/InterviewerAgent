@@ -1,36 +1,60 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { InterviewStatusBadge } from "@/components/status-badge";
 import { api, getToken, setToken } from "@/lib/api";
-import type { UserOut } from "@/types/api";
+import type { InterviewSummary } from "@/types/api";
 
 /**
- * 首页：P0 只做登录态展示 + 登出闭环；历史面试列表与「新建面试」入口随 P1 落地。
+ * 首页：历史面试列表（状态 / 得分 / 时间）+ 新建入口。
+ * 点击未结束的面试进入准备页；已结束的进入报告页（P4 里程碑开放）。
  */
 export default function HomePage() {
   const router = useRouter();
-  const [user, setUser] = useState<UserOut | null>(null);
+  const [interviews, setInterviews] = useState<InterviewSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      setInterviews(await api<InterviewSummary[]>("/interviews"));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "加载失败");
+    }
+  }, []);
 
   useEffect(() => {
     if (!getToken()) {
       router.replace("/login");
       return;
     }
-    api<UserOut>("/users/me")
-      .then(setUser)
-      .catch((err: unknown) => {
-        // api() 在 401 时已清 token 并跳登录页，这里处理其余错误
-        setError(err instanceof Error ? err.message : "加载用户信息失败");
-      });
-  }, [router]);
+    // setTimeout 把首拉取踢出 effect 同步段（react-hooks/set-state-in-effect）
+    const timer = setTimeout(() => void load(), 0);
+    return () => clearTimeout(timer);
+  }, [load, router]);
+
+  async function handleDelete(id: number) {
+    if (!window.confirm(`确定删除面试 #${id} 吗？对话记录与简历原件将一并删除。`)) return;
+    try {
+      await api(`/interviews/${id}`, { method: "DELETE" });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "删除失败");
+    }
+  }
 
   function handleLogout() {
     setToken(null);
     router.replace("/login");
+  }
+
+  function hrefFor(interview: InterviewSummary): string {
+    return interview.status === "finished" || interview.status === "aborted"
+      ? `/report?id=${interview.id}`
+      : `/prepare?id=${interview.id}`;
   }
 
   return (
@@ -42,35 +66,71 @@ export default function HomePage() {
             简历解析 → 联网核实 → 模拟面试 → 评估报告
           </p>
         </div>
-        {user ? (
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">
-              你好，{user.display_name ?? user.username}
-            </span>
-            <Button variant="outline" size="sm" onClick={handleLogout}>
-              退出登录
+        <div className="flex items-center gap-2">
+          <Button asChild>
+            <Link href="/new">新建面试</Link>
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleLogout}>
+            退出登录
+          </Button>
+        </div>
+      </header>
+
+      <section className="mt-10 space-y-4">
+        <h2 className="font-medium">历史面试</h2>
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        {!error && interviews === null ? (
+          <p className="text-sm text-muted-foreground">加载中……</p>
+        ) : null}
+
+        {interviews && interviews.length === 0 ? (
+          <div className="rounded-lg border border-dashed p-8 text-center">
+            <p className="text-sm text-muted-foreground">
+              还没有面试记录。上传一份简历，开始第一场有据可依的模拟面试吧。
+            </p>
+            <Button asChild className="mt-4">
+              <Link href="/new">新建面试</Link>
             </Button>
           </div>
         ) : null}
-      </header>
 
-      <section className="mt-12 space-y-4">
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
-        {!error && !user ? <p className="text-sm text-muted-foreground">加载中……</p> : null}
-        {user ? (
-          <div className="rounded-lg border border-dashed p-6">
-            <h2 className="font-medium">历史面试</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              还没有面试记录——「新建面试」功能将在下一个里程碑（P1 简历解析）开放。
-            </p>
-          </div>
+        {interviews && interviews.length > 0 ? (
+          <ul className="divide-y rounded-lg border">
+            {interviews.map((interview) => (
+              <li key={interview.id} className="flex items-center gap-3 px-4 py-3">
+                <Link
+                  href={hrefFor(interview)}
+                  className="flex flex-1 items-center gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                >
+                  <span className="text-sm tabular-nums text-muted-foreground">
+                    #{interview.id}
+                  </span>
+                  <InterviewStatusBadge status={interview.status} />
+                  {interview.position ? (
+                    <span className="text-sm text-muted-foreground">{interview.position}</span>
+                  ) : null}
+                  {interview.total_score != null && (
+                    <span className="text-sm font-medium tabular-nums">
+                      {Number(interview.total_score).toFixed(1)} 分
+                    </span>
+                  )}
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {new Date(interview.created_at).toLocaleString("zh-CN", { hour12: false })}
+                  </span>
+                </Link>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`删除面试 ${interview.id}`}
+                  className="text-destructive"
+                  onClick={() => void handleDelete(interview.id)}
+                >
+                  ×
+                </Button>
+              </li>
+            ))}
+          </ul>
         ) : null}
-        <p className="text-sm text-muted-foreground">
-          需要修改个人资料？{" "}
-          <Link href="/settings" className="text-primary underline-offset-4 hover:underline">
-            设置页（P5 里程碑）
-          </Link>
-        </p>
       </section>
     </main>
   );
