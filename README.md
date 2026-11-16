@@ -42,6 +42,18 @@ cd frontend && npm run build
 
 7. 开发期浏览器访问 http://localhost:3000；发布期直接访问 http://127.0.0.1:8000
 
+## 扫描件 PDF 识别
+
+PDF 优先读取文字层；提取文本少于 20 字符时，后端调用 PaddleOCR-VL-1.6（AI Studio），
+然后继续使用现有 LLM 生成结构化画像。DOCX/TXT/Markdown 路径不变。
+
+- 在 `backend/.env` 配置 `PADDLEOCR_MCP_AISTUDIO_ACCESS_TOKEN`；真实环境变量优先。
+- 运行环境需要 `uvx`（随 uv 安装）；首次调用会下载 `paddleocr-mcp`，无需本地 OCR 模型。
+- 每次识别独立启动并关闭 MCP 子进程；整体超时 180 秒，失败可在前端重试，不回退本地 OCR。
+- **隐私**：无有效文字层的 PDF 会发送至 AI Studio，最多上传前 10 页；应用不记录 OCR 正文或凭证。
+- 未配置 OCR token 不影响文字版 PDF；扫描件会返回明确配置错误。
+- `compare_ocr_pipelines.py` 现在比较后端直接调用 PaddleOCR 与 LLM 自主调用 PaddleOCR，不再比较本地 OCR。
+
 ## 测试
 
 ```bash

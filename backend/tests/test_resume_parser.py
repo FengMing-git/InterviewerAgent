@@ -48,7 +48,10 @@ def test_extract_docx_including_tables(tmp_path: Path):
     assert "王五" in text and "Spring" in text
 
 
-def test_extract_pdf_with_text(tmp_path: Path):
+def test_extract_pdf_with_text(tmp_path: Path, monkeypatch):
+    def unexpected_ocr(_path):
+        pytest.fail("文字版 PDF 不应调用云端 OCR")
+    monkeypatch.setattr("app.services.resume_parser.ocr_pdf", unexpected_ocr)
     with fitz.open() as pdf:
         page = pdf.new_page()
         page.insert_text((72, 72), "Zhao Liu Python developer resume")
@@ -56,15 +59,16 @@ def test_extract_pdf_with_text(tmp_path: Path):
     assert "Zhao Liu" in extract_text(tmp_path / "resume.pdf")
 
 
-def test_extract_pdf_without_text_layer(tmp_path: Path):
-    # 空白页 PDF：没有文字层 → 40003（SRS O4）
+def test_extract_pdf_without_text_layer(tmp_path: Path, monkeypatch):
+    # OCR 后仍为空 → 40003；单测不调用真实服务。
+    monkeypatch.setattr("app.services.resume_parser.ocr_pdf", lambda path: "")
     with fitz.open() as pdf:
         pdf.new_page()
         pdf.save(tmp_path / "scan.pdf")
     with pytest.raises(AppError) as exc_info:
         extract_text(tmp_path / "scan.pdf")
     assert exc_info.value.code == 40003
-    assert "扫描" in exc_info.value.message
+    assert "OCR" in exc_info.value.message
 
 
 def test_extract_unsupported_extension(tmp_path: Path):
@@ -173,7 +177,49 @@ def test_run_parse_failure_sets_failed_and_warning(db, monkeypatch, tmp_path: Pa
     assert interview.warnings[0]["code"] == 50000
 
 
+def test_run_parse_pdf_scan_cloud_success(db, monkeypatch, tmp_path: Path):
+    interview_id = _make_user_and_interview(db, tmp_path, "cloud.pdf")
+    path = tmp_path / "cloud.pdf"
+    with fitz.open() as pdf:
+        pdf.new_page()
+        pdf.save(path)
+    monkeypatch.setattr("app.services.storage.resolve_resume_path", lambda rel: path)
+    monkeypatch.setattr(
+        "app.services.resume_parser.ocr_pdf",
+        lambda path: "张三，计算机专业，熟悉 Python FastAPI MySQL，参与订单系统与博客开发",
+    )
+    llm = GenericFakeChatModel(messages=iter([AIMessage(content=_VALID_PROFILE_JSON)]))
+    monkeypatch.setattr("app.services.resume_parser.get_llm", lambda *a, **k: llm)
+    run_parse(interview_id)
+    db.expire_all()
+    interview = db.get(Interview, interview_id)
+    assert interview.parse_status == "done"
+    assert interview.profile["basic"]["name"] == "张三"
+    assert len(interview.profile["projects"]) == 2
+
+
+@pytest.mark.parametrize("code", [50000, 50401])
+def test_run_parse_cloud_failure_records_warning(db, monkeypatch, tmp_path: Path, code):
+    interview_id = _make_user_and_interview(db, tmp_path, "cloud.pdf")
+    path = tmp_path / "cloud.pdf"
+    with fitz.open() as pdf:
+        pdf.new_page()
+        pdf.save(path)
+    monkeypatch.setattr("app.services.storage.resolve_resume_path", lambda rel: path)
+    def fails(_path):
+        raise AppError(code, "PaddleOCR-VL 暂不可用", status=502)
+    monkeypatch.setattr("app.services.resume_parser.ocr_pdf", fails)
+    monkeypatch.setattr("app.services.resume_parser.get_llm", lambda *a, **k: pytest.fail("OCR 失败时不应调用 LLM"))
+    run_parse(interview_id)
+    db.expire_all()
+    interview = db.get(Interview, interview_id)
+    assert interview.parse_status == "failed"
+    assert interview.warnings[0]["code"] == code
+    assert interview.warnings[0]["task"] == "parse"
+
+
 def test_run_parse_pdf_scan_returns_40003_warning(db, monkeypatch, tmp_path: Path):
+    monkeypatch.setattr("app.services.resume_parser.ocr_pdf", lambda path: "")
     interview_id = _make_user_and_interview(db, tmp_path, "scan.pdf")
     scan_file = tmp_path / "scan.pdf"
     with fitz.open() as pdf:

@@ -4,7 +4,8 @@
 （Pydantic 校验 + 失败带错重试一次）→ 项目 id 重排 P1..Pn → 入库。
 
 错误码（SRS O4）：40001 格式不支持、40002 超过 10 MB（API 层校验）、
-40003 PDF 无文字层。任务失败不抛出接口（后台执行），落成 parse_status=failed
+40003 无法提取有效文本（含 OCR 后仍为空）。扫描件使用 PaddleOCR-VL 云端 OCR。
+任务失败不抛出接口（后台执行），落成 parse_status=failed
 + warning，前端可重试。
 """
 
@@ -12,17 +13,22 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import fitz  # PyMuPDF
+import pymupdf
 from docx import Document as DocxDocument
 
-from app.agent.llm import get_llm, structured_generate
+from app.agent.llm import get_llm, structured_generate, StructuredOutput
 from app.agent.prompts import RESUME_PARSE_SYSTEM, resume_parse_user_prompt
 from app.config import RESUME_TEXT_MAX_CHARS
-from app.core.errors import RESUME_FORMAT_UNSUPPORTED, RESUME_NO_TEXT, AppError
+from app.core.errors import (
+    RESUME_FORMAT_UNSUPPORTED,
+    RESUME_NO_TEXT,
+    AppError,
+)
 from app.core.logger import get_logger
 from app.models.orm import Interview
 from app.models.schemas import ResumeProfile, normalize_profile
 from app.services.tasks import add_warning, load_user, merge_token_usage, task_session
+from app.services.paddleocr import ocr_pdf
 
 log = get_logger(__name__)
 
@@ -36,9 +42,14 @@ def extract_text(path: Path) -> str:
     if ext == ".pdf":
         text = _extract_pdf(path)
         if len(text.strip()) < _MIN_PDF_TEXT_CHARS:
+            # 无有效文字层时调用 PaddleOCR-VL 云端服务；不再使用本地模型。
+            log.info("PDF 未检测到文字层，调用 PaddleOCR-VL")
+            text = ocr_pdf(path)
+        if len(text.strip()) < _MIN_PDF_TEXT_CHARS:
             raise AppError(
                 RESUME_NO_TEXT,
-                "PDF 中未检测到文字层（可能是扫描件或图片版），请换用文字版简历",
+                "PDF 中未检测到文字层，OCR 也未识别出有效文字，"
+                "请换用文字版简历或上传更清晰的扫描件",
                 status=400,
             )
         return text
@@ -55,7 +66,7 @@ def extract_text(path: Path) -> str:
 
 def _extract_pdf(path: Path) -> str:
     try:
-        with fitz.open(path) as doc:
+        with pymupdf.open(path) as doc:
             return "\n".join(page.get_text() for page in doc)
     except Exception as exc:  # noqa: BLE001 —— 损坏的 PDF 统一按无文字层处理
         raise AppError(

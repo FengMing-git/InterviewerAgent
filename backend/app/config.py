@@ -55,6 +55,9 @@ ZOMBIE_TASK_MINUTES = 5  # 后台任务僵死判定阈值（分钟），启动�
 
 # ── P1 解析流水线裁剪参数（防止提示词/上下文爆掉）──────────────────────
 RESUME_TEXT_MAX_CHARS = 12000  # 简历原文送入 LLM 的字符上限（超出截断）
+OCR_MAX_PAGES = 10  # 云端 OCR 最多上传前 10 页，限制成本与处理时间
+OCR_TIMEOUT = 180.0  # MCP 启动、识别及关闭的整体超时（秒）
+PADDLEOCR_MODEL = "PaddleOCR-VL-1.6"
 README_MAX_CHARS = 8000  # README 送入 LLM 的字符上限
 FILE_CONTENT_MAX_CHARS = 6000  # 单个关键文件送入 LLM 的字符上限
 TREE_MAX_ENTRIES = 500  # 目录树送入 LLM 的条目上限（超出按路径排序截断）
@@ -98,6 +101,8 @@ class Settings(BaseSettings):
     # ── 可选（缺失属于"优雅降级"，不是配置错误）────────────────────────────
     github_token: str = ""  # 不填则 GitHub 限流 60 次/h（§8 风险 1）
     http_proxy: str = ""
+    # 仅扫描件 OCR 需要；沿用 MCP 比较脚本的环境变量名
+    paddleocr_mcp_aistudio_access_token: str = ""
     # 默认值 = README 里那条 docker 起库命令，改过端口/密码才需要覆盖
     database_url: str = (
         "mysql+pymysql://root:ia123456@127.0.0.1:3306/intervieweragent?charset=utf8mb4"
